@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Dashboard</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <style>
+        /* Keep existing styles */
+        body {
+            padding-top: 20px;
+            background: linear-gradient(to right, #bffaff, #5791a4);
+            color: #333;
+        }
+
+        #video-stream {
+            max-width: 100%;
+            height: auto;
+            border: 5px solid #fff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transform: rotate(180deg);
+        }
+
+        .slider { width: 100%; }
+
+        .sensor-card,
+        .ocr-card {
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s;
+        }
+
+        .sensor-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #2c7a91;
+        }
+
+        .ocr-text {
+            font-size: 1.5rem;
+            color: #2c7a91;
+        }
+
+        .alert {
+            margin-top: 20px;
+            animation: fadeIn 0.5s;
+        }
+
+        .btn-ocr {
+            background-color: #2c7a91;
+            border: none;
+            color: white;
+            padding: 10px;
+            border-radius: 20px;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        #leak-alert {
+            background-color: #ff4444;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            animation: pulse 2s infinite;
+            display: none;
+        }
+
+        #leak-alert.show {
+            display: block;
+        }
+
+        .threshold-input {
+            width: 80px;
+            display: inline-block;
+            margin: 0 5px;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row">
+            <div class="col-md-8 text-center">
+                <h1 class="display-4">Water Meter Monitor</h1>
+                <img id="video-stream" src="video_stream/uploaded_image.jpg" alt="Camera Stream" class="img-fluid rounded">
+                <input type="range" min="0" max="4" value="0" class="slider mt-3" id="brightness-slider">
+                <div class="mt-3 card p-3">
+                    <h5>Water Leak Detection</h5>
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text">Alert if usage exceeds</span>
+                        </div>
+                        <input type="number" id="waterThreshold" class="form-control" value="50" min="1">
+                        <div class="input-group-append">
+                            <span class="input-group-text">m³ in 24 hours</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="sensor-card">
+                    <h3><i class="fas fa-thermometer-half"></i> Temperature</h3>
+                    <div class="sensor-value" id="temperature">
+                      <!-- Temperature will be displayed here -->
+                    </div>
+                </div>
+                <div class="sensor-card">
+                    <h3><i class="fas fa-tint"></i> Humidity</h3>
+                    <div class="sensor-value" id="humidity">
+                      <!-- Humidity will be displayed here -->
+                    </div>
+                </div>
+                <div class="sensor-card">
+                    <h3><i class="fas fa-cloud"></i> Air Quality</h3>
+                    <div class="sensor-value" id="air-quality">
+                      <!-- Air quality will be displayed here -->
+                    </div>
+                </div>
+                <div class="ocr-card">
+                    <h3><i class="fas fa-tachometer-alt"></i> Water Meter</h3>
+                    <div class="ocr-text" id="ocr-text">
+                      <!-- OCR text will be displayed here -->
+                    </div>
+                    <button id="trigger-ocr" class="btn btn-ocr">
+                        <i class="fas fa-camera"></i> Take Reading
+                    </button>
+                </div>
+                <div class="ocr-card">
+                    <h3><i class="fas fa-money-bill-wave"></i> Water Bill</h3>
+                    <div class="ocr-text" id="water-bill">
+                      <!-- Water bill will be displayed here -->
+                    </div>
+                </div>
+                <div id="leak-alert" class="alert">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="leak-message"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Video stream update
+        setInterval(function () {
+            const img = document.getElementById('video-stream');
+            img.src = 'video_stream/uploaded_image.jpg?' + new Date().getTime();
+        }, 100);
+
+        // Brightness control
+        const BRIGHTNESS_LEVELS = [0, 200, 400, 600, 800];
+        const BRIGHTNESS_URL = 'http://192.168.137.126:81/slider?value=';
+        const OCR_TRIGGER_URL = 'http://192.168.137.126:82/trigger';
+
+        document.getElementById('brightness-slider').addEventListener('input', function () {
+            const level = this.value;
+            const brightness = BRIGHTNESS_LEVELS[level];
+            fetch(BRIGHTNESS_URL + brightness);
+        });
+
+        // OCR trigger
+        document.getElementById('trigger-ocr').addEventListener('click', function() {
+            this.disabled = true;
+            fetch(OCR_TRIGGER_URL)
+                .then(() => setTimeout(updateSensorData, 2000))
+                .finally(() => this.disabled = false);
+        });
+
+        // Update sensor data
+        function updateSensorData() {
+            fetch('get.php')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok: ' + response.status);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log("Response data:", data);
+                    
+                    if (data.status === 'success') {
+                        // Update sensors
+                        if (data.sensor_data.latest) {
+                            document.getElementById('temperature').textContent = 
+                                data.sensor_data.latest.temperature;
+                            document.getElementById('humidity').textContent = 
+                                data.sensor_data.latest.humidity;
+                            document.getElementById('air-quality').textContent = 
+                                data.sensor_data.latest.air_quality;
+                        }
+
+                        // Update OCR and water bill
+                        if (data.water_data.latest_reading) {
+                            document.getElementById('ocr-text').textContent = 
+                                data.water_data.latest_reading.ocr_text;
+                            if (data.water_data.latest_reading.water_bill) {
+                                document.getElementById('water-bill').textContent = 
+                                    (data.water_data.latest_reading.water_bill / 1000).toFixed(1);
+                            }
+                            
+                            // Phát hiện rò rỉ nước 
+                            const threshold = parseInt(document.getElementById('waterThreshold').value);
+                            const waterUsage = data.water_data.debug.total_water_usage;
+                            
+                            if (waterUsage > threshold) {
+                                document.getElementById('leak-alert').classList.add('show');
+                                document.getElementById('leak-message').textContent = 
+                                    `Cảnh báo: Lượng nước sử dụng (${waterUsage} m³) vượt quá ngưỡng (${threshold} m³)`;
+                            } else {
+                                document.getElementById('leak-alert').classList.remove('show');
+                            }
+                        }
+                    } else {
+                        console.error("API returned error:", data);
+                    }
+                })
+                .catch(error => {
+                    console.error('Fetch error:', error);
+                });
+        }
+
+        // Save threshold when changed
+        document.getElementById('waterThreshold').addEventListener('change', function() {
+            const value = this.value;
+            localStorage.setItem('waterThreshold', value);
+        });
+
+        // Load saved threshold and start updates
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedThreshold = localStorage.getItem('waterThreshold') || '50';
+            document.getElementById('waterThreshold').value = savedThreshold;
+            updateSensorData();
+            setInterval(updateSensorData, 5000);
+        });
+    </script>
+</body>
+</html>
