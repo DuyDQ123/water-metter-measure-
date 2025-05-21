@@ -111,26 +111,26 @@
             <div class="col-md-4">
                 <div class="sensor-card">
                     <h3><i class="fas fa-thermometer-half"></i> Temperature</h3>
-                    <div class="sensor-value" id="temperature">
-                      <!-- Temperature will be displayed here -->
+                    <div class="sensor-value">
+                        <span id="temperature">--</span>°C
                     </div>
                 </div>
                 <div class="sensor-card">
                     <h3><i class="fas fa-tint"></i> Humidity</h3>
-                    <div class="sensor-value" id="humidity">
-                      <!-- Humidity will be displayed here -->
+                    <div class="sensor-value">
+                        <span id="humidity">--</span>%
                     </div>
                 </div>
                 <div class="sensor-card">
                     <h3><i class="fas fa-cloud"></i> Air Quality</h3>
-                    <div class="sensor-value" id="air-quality">
-                      <!-- Air quality will be displayed here -->
+                    <div class="sensor-value">
+                        <span id="air-quality">--</span> PPM
                     </div>
                 </div>
                 <div class="ocr-card">
                     <h3><i class="fas fa-tachometer-alt"></i> Water Meter</h3>
-                    <div class="ocr-text" id="ocr-text">
-                      <!-- OCR text will be displayed here -->
+                    <div class="ocr-text">
+                        <span id="ocr-text">--</span> m³
                     </div>
                     <button id="trigger-ocr" class="btn btn-ocr">
                         <i class="fas fa-camera"></i> Take Reading
@@ -138,8 +138,8 @@
                 </div>
                 <div class="ocr-card">
                     <h3><i class="fas fa-money-bill-wave"></i> Water Bill</h3>
-                    <div class="ocr-text" id="water-bill">
-                      <!-- Water bill will be displayed here -->
+                    <div class="ocr-text">
+                        <span id="water-bill">--</span>K VNĐ
                     </div>
                 </div>
                 <div id="leak-alert" class="alert">
@@ -161,8 +161,8 @@
 
         // Brightness control
         const BRIGHTNESS_LEVELS = [0, 200, 400, 600, 800];
-        const BRIGHTNESS_URL = 'http://192.168.137.126:81/slider?value=';
-        const OCR_TRIGGER_URL = 'http://192.168.137.126:82/trigger';
+        const BRIGHTNESS_URL = 'http://192.168.137.75:81/slider?value=';
+        const OCR_TRIGGER_URL = 'http://192.168.137.75:82/trigger';
 
         document.getElementById('brightness-slider').addEventListener('input', function () {
             const level = this.value;
@@ -181,15 +181,8 @@
         // Update sensor data
         function updateSensorData() {
             fetch('get.php')
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok: ' + response.status);
-                    }
-                    return response.json();
-                })
+                .then(response => response.json())
                 .then(data => {
-                    console.log("Response data:", data);
-                    
                     if (data.status === 'success') {
                         // Update sensors
                         if (data.sensor_data.latest) {
@@ -209,26 +202,57 @@
                                 document.getElementById('water-bill').textContent = 
                                     (data.water_data.latest_reading.water_bill / 1000).toFixed(1);
                             }
+                        }
+
+                        // Check for water leak
+                        if (data.water_data.all_readings && data.water_data.all_readings.length > 1) {
+                            const threshold = parseFloat(document.getElementById('waterThreshold').value);
+                            const now = new Date();
+                            const twentyFourHoursAgo = new Date(now - 24 * 60 * 60 * 1000);
                             
-                            // Phát hiện rò rỉ nước 
-                            const threshold = parseInt(document.getElementById('waterThreshold').value);
-                            const waterUsage = data.water_data.debug.total_water_usage;
-                            
-                            if (waterUsage > threshold) {
-                                document.getElementById('leak-alert').classList.add('show');
-                                document.getElementById('leak-message').textContent = 
-                                    `Cảnh báo: Lượng nước sử dụng (${waterUsage} m³) vượt quá ngưỡng (${threshold} m³)`;
-                            } else {
-                                document.getElementById('leak-alert').classList.remove('show');
+                            // Get readings from last 24 hours
+                            const recentReadings = data.water_data.all_readings.filter(reading => {
+                                return new Date(reading.timestamp) >= twentyFourHoursAgo;
+                            });
+
+                            if (recentReadings.length >= 2) {
+                                // Find min and max readings
+                                const minReading = recentReadings.reduce((min, reading) => 
+                                    parseFloat(reading.ocr_text) < parseFloat(min.ocr_text) ? reading : min
+                                , recentReadings[0]);
+                                
+                                const maxReading = recentReadings.reduce((max, reading) => 
+                                    parseFloat(reading.ocr_text) > parseFloat(max.ocr_text) ? reading : max
+                                , recentReadings[0]);
+
+                                // Calculate usage
+                                const minValue = parseFloat(minReading.ocr_text);
+                                const maxValue = parseFloat(maxReading.ocr_text);
+                                const usage = maxValue - minValue;
+
+                                const leakAlert = document.getElementById('leak-alert');
+                                const leakMessage = document.getElementById('leak-message');
+                                
+                                if (usage > threshold) {
+                                    leakAlert.classList.add('show');
+                                    leakMessage.textContent = 
+                                        `Total usage ${usage.toFixed(1)}m³ in last 24h exceeds threshold (${threshold}m³)`;
+                                } else {
+                                    leakAlert.classList.remove('show');
+                                }
                             }
                         }
-                    } else {
-                        console.error("API returned error:", data);
+
+                        // Print debug info
+                        console.log("Latest data:", {
+                            latest_reading: data.water_data.latest_reading,
+                            first_reading: data.water_data.first_reading,
+                            all_readings: data.water_data.all_readings,
+                            debug: data.water_data.debug
+                        });
                     }
                 })
-                .catch(error => {
-                    console.error('Fetch error:', error);
-                });
+                .catch(console.error);
         }
 
         // Save threshold when changed

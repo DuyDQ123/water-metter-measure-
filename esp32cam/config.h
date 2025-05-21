@@ -43,7 +43,7 @@ public:
     
     const char* getSSID() const { return "duy"; }
     const char* getPassword() const { return "11111111"; }
-    const char* getNgrokUrl() const { return "49e0-2402-800-9800-d472-2dce-635b-a91c-c53b.ngrok-free.app"; }
+    const char* getNgrokUrl() const { return "fdbc-2001-ee0-4b47-eb00-30fe-a1e2-b41d-d26e.ngrok-free.app"; }
     const char* getServerUrl() const { return "http://192.168.137.1"; }
     const char* getOcrApiUrl() const { return "https://api.ocr.space/parse/image"; }
     const char* getOcrApiKey() const { return "K85797055088957"; }
